@@ -153,14 +153,14 @@ in `docs/TESTING.md` section 6:
 *Quality and operations*
 
 - The automated checks are a shell script of curl + `mysql` assertions
-  (`docs/verify.sh`, 143 checks, all passing on the last run) rather than a
+  (`docs/verify.sh`, 143 checks, all passing on the last run) plus a headless
+  Chrome session over CDP (48 checks, no uncaught JS errors) rather than a
   PHPUnit suite inside the project; there is no CI, no code-coverage measurement
-  and no static analysis (Psalm/PHPStan) run.
-- Browser-level behaviour of `public/assets/js/app.js` (confirm modal, inline
-  validation, counters, auto-submit) was never executed in a browser - see
-  `docs/TESTING.md` section 7.
-- Screenshots could not be produced in this environment; `docs/screenshots/`
-  contains the list of what to capture instead.
+  and no static analysis (Psalm/PHPStan) run. The browser driver is not shipped
+  because it hard-codes this machine's Chrome path.
+- `docs/screenshots/` holds the 17 real captures, produced by that browser run
+  and reviewed by eye; the responsive check is an emulated 390x844 viewport, not
+  a physical phone, and no screen-reader or keyboard-only pass was done.
 - Styling depends on a Bootstrap CDN, so an air-gapped machine sees an
   unstyled but fully working page; vendoring the CSS/JS locally would fix it.
 - Tested against MySQL 8.0.45 only. The schema should work on MariaDB 10.3+

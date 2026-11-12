@@ -1,34 +1,48 @@
-# Screenshots to capture
+# Screenshots
 
-No screenshots are included: this deliverable was built and verified in a
-terminal-only environment (PHP built-in server + curl), with no browser
-available to render the pages. The list below is exactly what should be
-captured, so the folder can be filled in by running the app once.
+These were captured automatically from the running application in headless
+Chrome 157 (1440x900 desktop, one 390x844 mobile frame), driven over the DevTools
+protocol against `php -S 127.0.0.1:8000 -t public` with `sql/database.sql`
+freshly imported. Every image is a real render of the app, not a mockup, and
+each was reviewed before committing.
 
-**Before starting:** import `sql/database.sql`, sign in as `alice@example.com`
-(`Alice@1234`) for shots 1-8 and as `admin@example.com` (`Admin@1234`) for the
-admin shot. Use a 1440x900 desktop window, and one 390x844 mobile capture for
-the responsive check. Browser zoom 100%.
+The same session that produced them ran the 48 browser assertions described in
+`docs/TESTING.md` section 3b, so each picture is paired with a check of the
+behaviour it shows.
 
-| File name | Page | What must be visible |
-|-----------|------|----------------------|
-| `01-login.png` | `/login.php` | Sign-in card with email + password fields, the "Register" link, no navbar user area |
-| `02-dashboard.png` | `/tasks/index.php` as Alice | Navbar with Alice's name and the `user` badge, the four summary cards (Total / Pending / In Progress / Completed), the search + status + priority filter panel, and the task table with status dropdowns, priority badges, due dates and Edit/Delete buttons |
-| `03-add-form-empty.png` | `/tasks/create.php` | Blank form: required-title asterisk, status select defaulting to *Pending*, priority defaulting to *Medium*, empty optional due date, character counters at 0/150 and 0/2000 |
-| `04-add-success.png` | `/tasks/index.php` immediately after saving a new task | Green "Task added." flash alert above the table, with the new row visible |
-| `05-edit-form.png` | `/tasks/edit.php?id=<one of Alice's tasks>` | Heading "Edit task #N", the row's existing values filled in, counters reflecting the current length, Cancel link |
-| `06-validation-error.png` | `/tasks/create.php` after submitting a 160-character title | Red bordered title field, message "Title must be 150 characters or fewer (currently 160).", the over-length counter in red, **and the submitted text still in the field** |
-| `07-search-filter.png` | `/tasks/index.php?q=report&status=Pending` | Search box containing `report`, status select showing *Pending*, the "Showing 1-2 of 2 tasks" caption, the "Clear all filters" link, and the matching rows only |
-| `08-pagination.png` | `/tasks/index.php?page=2` (Alice needs 11+ rows; otherwise use the admin account) | "Showing 11-…" caption with page 2 highlighted in the pagination control |
-| `09-delete-confirm.png` | `/tasks/index.php`, after clicking Delete on a row | The Bootstrap modal "Please confirm" naming the task, with Cancel and "Yes, delete" buttons |
-| `10-admin-view.png` | `/tasks/index.php` as the admin | "All tasks" heading, admin note under it, the extra **Owner** column showing names such as "Alice Example", `admin` badge in the navbar, and a foreign task's status rendered as a read-only badge with no Edit button |
-| `11-403-denied.png` | `/tasks/edit.php?id=<a task owned by Bob>` while signed in as Alice | The 403 page: big "403", "Only the owner of a task can change its contents or status.", and the "Back to Task Tracker" button - and nothing else, no error detail |
-| `12-404-not-found.png` | `/tasks/edit.php?id=999999` as Alice | 404 page with "That task does not exist." |
-| `13-logout-or-anon-redirect.png` | `/tasks/index.php` with no session (or the page you land on after signing out) | The login page reached by redirect, optionally with the "Please sign in to continue." flash still showing |
-| `14-mobile-dashboard.png` | `/tasks/index.php` as Alice at 390x844 | Cards stacked two per row, the table horizontally scrollable, navbar actions still reachable |
+| File | Screen | Signed in as | Notes |
+|------|--------|--------------|-------|
+| `01-login.png` | Sign-in page | anonymous | the public entry point |
+| `02-dashboard.png` | Task list / dashboard | Alice | "Welcome back." flash, cards Total 5 / Pending 3 / In Progress 1 / Completed 1, filter panel, status dropdowns, priority badges, due dates, Edit + Delete per row |
+| `03-add-form-empty.png` | Add task, untouched | Alice | required marker, defaults Pending / Medium, empty optional due date, counters at 0/150 and 0/2000 |
+| `04-add-success.png` | List right after a save | Alice | green "Task added." flash with the new "Screenshot task" row in place |
+| `05-edit-form.png` | Edit task | Alice | heading "Edit task #15" with the row's values prefilled |
+| `06-validation-error.png` | **Server-side** rejection | Alice | submitted with `form.submit()` so the JavaScript checks are bypassed: red title field, "Title must be 150 characters or fewer (currently 160).", counter in red at 160/150, and the typed text still in the field |
+| `07-search-filter.png` | Search + status filter | Alice | `?q=report&status=Pending`, both controls keep their values |
+| `08-pagination.png` | Page 2 | admin | remaining rows, page 2 marked active |
+| `09-delete-confirm.png` | Delete confirmation modal | Alice | Bootstrap modal naming the task; it was cancelled afterwards, nothing was deleted |
+| `10-admin-view.png` | All tasks | admin | Owner column with names and emails, read-only badges on other users' rows, Edit only on the admin's own tasks |
+| `11-403-denied.png` | 403 page | admin | "Only the owner of a task can change its contents or status." - no technical detail |
+| `12-404-not-found.png` | 404 page | admin | unknown task id |
+| `13-logout-or-anon-redirect.png` | Signed out | anonymous | login page reached through the navbar Sign out button; the user area is gone |
+| `14-mobile-dashboard.png` | Dashboard at 390x844 | Alice | cards two per row, table wrapper scrolls horizontally |
+| `15-validation-client-blocked.png` | **Client-side** rejection | Alice | the same 160-character title stopped by `app.js` before any request leaves the browser |
+| `16-register-client-validation.png` | Register form, JS validation | anonymous | blank name, `not-an-email`, a 3-character password and a mismatched confirmation, all four flagged in the page without a request going out |
+| `17-register-server-validation.png` | Register form, server rejection | anonymous | the same input submitted with the client checks bypassed - PHP refuses it and keeps the typed email address |
 
-Suggested order to make them in one sitting: 1, 2, 3, 4, 5, 6, 7, 8, 9 (cancel,
-don't delete), 10, 11, 12, 14, then 13 last because it signs you out.
+06 and 15 are deliberately a pair: the first proves the server re-validates even
+when the browser check is skipped, the second proves the browser check fires
+first for real users. 16 and 17 repeat that pair for the register form.
 
-Shots 11 and 12 need a second account: keep Alice's session in one browser
-profile and note Bob's task ids from an admin session first.
+## Re-capturing them
+
+```bash
+php -S 127.0.0.1:8000 -t public &
+mysql -u root -p < sql/database.sql
+"/path/to/chrome.exe" --headless=new --remote-debugging-port=9222 \
+    --user-data-dir=/tmp/tt-chrome about:blank &
+node path/to/browser-driver.mjs        # the CDP script, kept outside this repo
+```
+
+The driver is not part of the deliverable because it hard-codes this machine's
+Chrome path and port; the checks it performs are written up in `TESTING.md`.

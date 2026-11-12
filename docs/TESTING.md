@@ -140,6 +140,36 @@ These four cases were written because the README tells people to create
 | F-04 | Point `config.php` at a port where nothing listens, request an authenticated page | 500 page "cannot reach the database... imported", with no `SQLSTATE`, no `dbname=`, no `root@` and no credentials | P (5 checks) |
 | F-05 | Run `docs/verify.sh` without the acknowledgement variable | refuse and exit non-zero without touching the database | P (exit 2) |
 
+## 3b. Browser checks (headless Chrome 157 over CDP)
+
+The JavaScript layer was then executed in a real browser - headless Chrome
+driven over the DevTools protocol (`Submission-test/browser.mjs`, kept outside
+the deliverable because it is environment-specific). **48 checks, 0 failed, and
+zero uncaught JavaScript errors or `console.error` output across the whole
+run.** The two "failed to load resource" entries it logged are the 403 and 404
+pages I requested on purpose.
+
+What this proves that curl could not:
+
+| Area | Observed in the browser |
+|------|-------------------------|
+| Bootstrap 5 from CDN | applied (navbar has a computed background colour, cards/badges render) - see the PNGs in this folder |
+| Login through the form | submit lands on `/tasks/index.php`, navbar shows the name and the `user` badge |
+| Character counters | start at 0, update live on `input`, turn red past the limit (`160/150 characters`) |
+| Client-side validation | a 160-character title is blocked before submission: no navigation, `is-invalid` on the field, message "…(currently 160)" |
+| Server-side validation | submitting the same form with `form.submit()` (which skips the JS checks) is **still** rejected by PHP, with the typed text preserved - the client check is a convenience, not the control |
+| Status dropdown | the no-JS "Set" button is hidden when JS runs; changing the select auto-submits, the flash `Task #N is now "Completed".` appears and the row keeps the new value |
+| Delete confirmation | clicking Delete opens a Bootstrap modal naming the task (text set via `textContent`, so a title cannot inject markup); cancelling leaves the row count unchanged |
+| Search / filter | the typed term and the selected status survive in the form controls |
+| Register form | blank name, invalid email, short password and mismatched confirmation are each flagged in the page without a request going out; the same input submitted with the JS checks bypassed is refused by PHP and keeps the typed email. This one mattered: `form.name` and `form.title` only reach the input because `HTMLFormElement` shadows built-in property names with its named controls, so the client validator was tested field by field instead of assumed |
+| Pagination | page 2 shows the remaining rows and marks page 2 active |
+| Admin view | Owner column present, other users' rows show a read-only badge with **no** `<select>`, Edit button only on the admin's own rows |
+| 403 / 404 | the friendly pages render with no technical detail (captured as `11-403-denied.png`, `12-404-not-found.png`) |
+| Logout | exactly one logout form in the navbar; clicking it returns to the login page and the user area disappears |
+| Responsive | at 390x844 the four cards sit two-per-row and `.table-responsive` scrolls horizontally (`scrollWidth > clientWidth`) |
+
+`docs/screenshots/` now contains the actual PNGs for all 17 of those screens.
+
 ## 4. Static and configuration checks
 
 The machine used for testing ships `display_errors = On` / `error_reporting =
@@ -203,15 +233,11 @@ as bound parameters.
 
 ## 7. Not verified by execution (stated honestly)
 
-- **Browser-side behaviour.** The confirmation modal, the inline validation
-  messages, the character counters and the auto-submitting status dropdown
-  (`public/assets/js/app.js`) were written and linted but **never run in a real
-  browser** - this environment has no browser automation. The server rejects
-  everything the client-side checks are meant to catch, and every case above was
-  exercised without JavaScript, so no functional conclusion depends on the JS.
-  The visible result of that is unverified.
-- **Bootstrap 5 layout / responsiveness** at various screen widths, and the CDN
-  SRI hashes actually loading from this machine (offline here).
+- **Real-device and assistive-tech behaviour.** The mobile check was an emulated
+  390x844 viewport in Chrome, not a phone; keyboard-only navigation, screen
+  readers and touch targets were not assessed.
+- **Visual polish beyond the 17 captured screens.** Empty states, the CSRF and
+  500 pages and the flash variants were verified by content, not by eye.
 - **The `.htaccess` deny rules.** No Apache was available to test them, so their
   effect is reasoned, not observed. With `php -S` they do nothing at all; the
   real protection is keeping `public/` as the docroot, which is why L3-36 also
@@ -222,6 +248,9 @@ as bound parameters.
 - **XAMPP itself.** Apache + `htdocs` was not available; the equivalent was
   tested by serving the repo root with `php -S` and verifying URL generation.
 - **Concurrent registration** for the same email (relies on the UNIQUE index,
-  which was tested one request at a time), password-reset, email sending,
+  which was tested one request at a time), password-reset, email sending and
   rate limiting/lockout after repeated failed logins - none of these exist in
   this application (see `docs/NOTES.md`).
+- **Cross-browser support.** Only Chrome was exercised; the JS uses standard
+  DOM APIs (`dataset`, `closest`, `FormData`-free plain form posts) but Firefox
+  and Safari were not run.
