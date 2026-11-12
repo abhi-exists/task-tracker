@@ -22,14 +22,26 @@ Two passes:
 
 1. **`php -l` on every PHP file** - the 20 files tracked in the repository
    (21 counting the local, git-ignored `config.php`), no syntax errors.
-2. **A scripted end-to-end pass** of 132 checks (`smoke.sh`, kept outside the
-   deliverable) driving the running server with curl and confirming results
-   with SQL. **Final run: 132 passed, 0 failed.** Three earlier runs found real
-   defects, listed in section 6.
+2. **`docs/verify.sh`** - the end-to-end harness that is part of this
+   submission. It drives the running server with curl (one cookie jar per
+   identity) and confirms what really happened with direct `mysql` queries.
+   **Last full run: 143 checks, 0 failed** (exit code 0).
+   It is destructive by design - it re-imports `sql/database.sql`, creates
+   throwaway accounts and deletes rows - so it refuses to start unless
+   `I_WIPE_THE_DATABASE=yes` is set (verified: exits with code 2 otherwise).
 
 Each check either compared an HTTP status code, compared a value read back from
 MySQL, or searched the rendered HTML for a string that must be present (or must
-be absent).
+be absent). Run it yourself with the app serving on port 8000:
+
+```bash
+I_WIPE_THE_DATABASE=yes bash docs/verify.sh
+# non-default MySQL: DB_PORT=13307 MYSQL_BIN=/path/to/mysql I_WIPE_THE_DATABASE=yes bash docs/verify.sh
+```
+
+Earlier runs of the same harness found the defects in section 6 - including one
+run with 16 failures, most of which turned out to be wrong assumptions in the
+*test script* rather than in the app; those are called out separately there.
 
 ## 3. Manual test cases
 
@@ -115,7 +127,36 @@ Result column: **P** = passed as described in the run.
 | L3-38 | Upgrade path: import the Level 1 schema, then migrations 002 and 003 | 5 pre-existing rows get an owner, FK `fk_tasks_user` present, no orphaned tasks, admin can log in against the migrated database | P |
 | L3-39 | Grep all sources for SQL built from request data | no `prepare`/`query` call receives `$_GET`/`$_POST`; no interpolated SQL literal; PDO only (no `mysqli`/`mysql_*`) | P |
 
-## 4. Static checks
+### Bootstrap failure paths (added after the first documentation pass)
+
+These four cases were written because the README tells people to create
+`config.php` by hand - and that path had never been exercised.
+
+| # | Steps | Expected | Result |
+|---|-------|----------|--------|
+| F-01 | Move `config.php` away, request `login.php` | 503 page that says to copy `config.sample.php`; no filesystem path in the HTML | P (503; instruction shown; path absent) |
+| F-02 | Replace `config.php` with a file containing a **syntax error**, request `login.php` | generic 500 page; **no `Parse error`, no `on line`, no path** | P (see bug BUG-8 - this leaked before the fix) |
+| F-03 | Restore the real `config.php` | file byte-identical to the backup, app answers 200 again | P |
+| F-04 | Point `config.php` at a port where nothing listens, request an authenticated page | 500 page "cannot reach the database... imported", with no `SQLSTATE`, no `dbname=`, no `root@` and no credentials | P (5 checks) |
+| F-05 | Run `docs/verify.sh` without the acknowledgement variable | refuse and exit non-zero without touching the database | P (exit 2) |
+
+## 4. Static and configuration checks
+
+The machine used for testing ships `display_errors = On` / `error_reporting =
+E_ALL` in its `php.ini` - exactly the hostile default worth checking against.
+The effective values inside a real request were measured (temporarily, with a
+throwaway script that loaded the bootstrap and printed `ini_get()` plus the PDO
+attributes; the file was deleted afterwards and is not part of the app):
+
+| Setting | Measured at runtime | Expected |
+|---------|--------------------|----------|
+| `display_errors` | `0` | off, despite php.ini saying On |
+| `log_errors` | `1` | on |
+| `error_reporting` | `32767` (= E_ALL) | everything reported, then hidden |
+| `session.use_strict_mode` | `1` | on: client-chosen session ids rejected |
+| `session.cookie_httponly` | `1` | on |
+| `PDO::ATTR_EMULATE_PREPARES` | `0` | off - MySQL sees the real parameterised statement |
+| `PDO::ATTR_ERRMODE` | `2` (`ERRMODE_EXCEPTION`) | exceptions, never silent failures |
 
 ```
 php -l on all 20 tracked PHP files   -> no syntax errors
@@ -158,6 +199,7 @@ as bound parameters.
 | **BUG-5** | Reviewing `logout.php` | Logout accepted a GET, so any link or image could sign a user out (and it was the one state-changing page without a CSRF check) | Logout is now POST + CSRF only; L3-30 proves a GET leaves the session alive |
 | **BUG-6** | First `php -l` pass | A stray `ErrorHandler:` label left in `src/config.php` - a parse error that broke every page | Removed; the lint pass is now run before every commit |
 | **BUG-7** | Run 1, 16 failing checks | Several *test-script* assumptions were wrong (accessing `register.php` while already signed in, expecting a row that sits on page 2 of 10, reading the flash from the 302 response instead of the following page, hard-coded counts after earlier cases deleted rows) | The script now re-authenticates as the right user, searches instead of scanning page 1, follows the redirect before asserting a flash, and derives counts from the database. Recorded here because these were *test* defects, not application defects |
+| **BUG-8** | Testing the "did you follow the README?" paths in `docs/verify.sh` section 14 | This machine's `php.ini` ships `display_errors = On`, and `src/config.php` only switched it off **after** `require`-ing the site's `config.php`. A syntax error in that file - the one file a human types by hand - therefore printed PHP's raw parse error to the browser, including the **full Windows path** of the project: `Parse error: Unclosed '[' on line 2 in C:\Users\...\config.php`. It also skipped `docs/verify.sh`'s own leak assertions on the way | The error-mode setup (`display_errors=0`, `log_errors`, `error_reporting`, the error/exception handlers and the shutdown handler) now runs **before** any user file is loaded, with production-safe defaults, and the `debug` flag from the config is applied afterwards. `error_get_last()` in the shutdown handler catches the parse error and renders the generic 500. F-02 re-tested: 500, no parse text, no path. Note this was a latent risk, not a live leak - the same page never shows credentials |
 
 ## 7. Not verified by execution (stated honestly)
 

@@ -27,28 +27,16 @@ function tt_fatal(string $logMessage, string $friendly = 'Something went wrong o
     exit;
 }
 
-// ---------------------------------------------------------------- config ----
-$configFile = TT_ROOT . '/config.php';
-if (!is_readable($configFile)) {
-    tt_fatal(
-        'config.php is missing',
-        'Configuration is missing. Copy config.sample.php to config.php and set your database credentials.',
-        503
-    );
-}
-
-$config = require $configFile;
-if (!is_array($config) || empty($config['db']['name'])) {
-    tt_fatal('config.php does not return a valid configuration array', 'The application is misconfigured.');
-}
-
-date_default_timezone_set($config['app']['timezone'] ?? 'UTC');
-
 // ------------------------------------------------------------ error mode ----
 // Errors are logged server-side and shown as a generic page. Raw messages can
 // leak table names, file paths or DSN details, so they never reach the client.
-$debug   = (bool)($config['app']['debug'] ?? false);
-ini_set('display_errors', $debug ? '1' : '0');
+//
+// This block must run BEFORE the site's config.php is loaded: a stray syntax
+// error in that file would otherwise be printed by PHP itself - with its full
+// filesystem path - while display_errors still held php.ini's value.
+// Production-safe settings first, relaxed only if the config asks for debug.
+$debug = false;
+ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
@@ -83,6 +71,26 @@ register_shutdown_function(static function (): void {
     }
     tt_fatal(sprintf('Fatal: %s in %s:%d', $last['message'], $last['file'], $last['line']));
 });
+
+// ---------------------------------------------------------------- config ----
+$configFile = TT_ROOT . '/config.php';
+if (!is_readable($configFile)) {
+    tt_fatal(
+        'config.php is missing',
+        'Configuration is missing. Copy config.sample.php to config.php and set your database credentials.',
+        503
+    );
+}
+
+$config = require $configFile;
+if (!is_array($config) || empty($config['db']['name'])) {
+    tt_fatal('config.php does not return a valid configuration array', 'The application is misconfigured.');
+}
+
+date_default_timezone_set($config['app']['timezone'] ?? 'UTC');
+
+$debug = (bool)($config['app']['debug'] ?? false);
+ini_set('display_errors', $debug ? '1' : '0');
 
 // ---------------------------------------------------------------- session ----
 if (session_status() !== PHP_SESSION_ACTIVE) {

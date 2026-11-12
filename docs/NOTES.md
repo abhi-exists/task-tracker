@@ -92,6 +92,17 @@ in `docs/TESTING.md` section 6:
   answers 405 with an `Allow:` header otherwise.
 - **Logout** was reachable by GET (a CSRF-style annoyance attack) and is now
   POST-only with a token, like every other state change.
+- **Bootstrap ordering, and a path leak** - the failure paths in the README
+  ("you must create config.php yourself") were only tested after the first
+  documentation pass. Two problems appeared: nothing at all was shown for a
+  missing/unreachable database (the test itself had been short-circuiting on an
+  anonymous redirect), and a **syntax error in the hand-written `config.php`
+  printed PHP's raw parse error, with the project's full filesystem path**,
+  because `src/config.php` switched `display_errors` off only *after* loading
+  that file - on this machine `php.ini` sets it to `On`. All error handling is
+  now configured before any user file is read, with production-safe defaults,
+  and the `debug` flag is applied afterwards. `docs/TESTING.md` cases F-01 to
+  F-05 cover it.
 - A parse-breaking stray label in `src/config.php` caught by the first
   `php -l` pass.
 
@@ -141,9 +152,10 @@ in `docs/TESTING.md` section 6:
 
 *Quality and operations*
 
-- The 132 automated checks live in a curl script outside the deliverable, not in
-  a PHPUnit suite inside it; there is no CI, no code-coverage measurement and no
-  static analysis (Psalm/PHPStan) run.
+- The automated checks are a shell script of curl + `mysql` assertions
+  (`docs/verify.sh`, 143 checks, all passing on the last run) rather than a
+  PHPUnit suite inside the project; there is no CI, no code-coverage measurement
+  and no static analysis (Psalm/PHPStan) run.
 - Browser-level behaviour of `public/assets/js/app.js` (confirm modal, inline
   validation, counters, auto-submit) was never executed in a browser - see
   `docs/TESTING.md` section 7.

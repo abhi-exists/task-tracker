@@ -235,7 +235,7 @@ src/
   TaskRepository.php  every task query, including the ownership rules
 templates/          header.php, footer.php, task_form.php, error.php
 sql/                database.sql (complete) + migrations/002, 003
-docs/               TESTING.md, NOTES.md, screenshots/SCREENSHOTS.md
+docs/               TESTING.md, NOTES.md, verify.sh, screenshots/SCREENSHOTS.md
 ```
 
 ---
@@ -284,7 +284,29 @@ mysql -u root -p -e "USE task_tracker; SELECT COUNT(*) FROM users; SELECT COUNT(
 ## 8. Checking it yourself
 
 `docs/TESTING.md` lists the manual cases with the results obtained on PHP
-8.3.36 + MySQL 8.0.45. The security-critical ones are quick to repeat by hand:
+8.3.36 + MySQL 8.0.45.
+
+There is also a script that repeats all of them: `docs/verify.sh` drives the
+running app with curl (one cookie jar per identity) and confirms each result
+with a direct `mysql` query - 143 checks covering anonymous access, session
+cookies, login, CSRF, cross-user authorization, registration rules, admin
+limits, search/filter/pagination, validation, CRUD, logout, error hygiene, the
+foreign-key cascade and the `config.php` failure paths.
+
+It **drops and re-imports the `users` and `tasks` tables**, so it refuses to run
+at all unless you say so explicitly:
+
+```bash
+php -S 127.0.0.1:8000 -t public          # in one terminal
+I_WIPE_THE_DATABASE=yes bash docs/verify.sh
+```
+
+Use against a testing database only. If your MySQL is not on the default port
+or the client is not in `PATH`, pass it: `DB_PORT=3306 MYSQL_BIN=/path/to/mysql
+I_WIPE_THE_DATABASE=yes bash docs/verify.sh`. Exit code 0 means every check
+passed; each one prints a `PASS`/`FAIL` line.
+
+The security-critical checks are also quick to repeat by hand:
 
 1. Sign in as Alice, open a task of your own, note its id, then change the id in
    the URL to one of Bob's tasks - you get a 403 page, not Bob's data.
