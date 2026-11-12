@@ -1,8 +1,12 @@
 <?php
 /**
  * Shared page header. Expects $page_title (string).
+ * When a session user exists the navbar shows who is signed in and a POST
+ * logout form; anonymous visitors (login/register pages) get the plain header.
+ *
  * @var string $page_title
  */
+$navUser = auth_user();
 ?>
 <!doctype html>
 <html lang="en">
@@ -17,10 +21,23 @@
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
     <div class="container">
-        <a class="navbar-brand fw-semibold" href="<?= e(tt_url('index.php')) ?>">Task Tracker</a>
-        <div class="ms-auto">
-            <a class="btn btn-outline-light btn-sm" href="<?= e(tt_url('tasks/create.php')) ?>">+ New task</a>
-        </div>
+        <a class="navbar-brand fw-semibold" href="<?= e(tt_url($navUser ? 'tasks/index.php' : 'login.php')) ?>">Task Tracker</a>
+
+        <?php if ($navUser !== null): ?>
+            <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+                <a class="btn btn-outline-light btn-sm" href="<?= e(tt_url('tasks/create.php')) ?>">+ New task</a>
+                <span class="text-white-50 small">
+                    <?= e($navUser['name']) ?>
+                    <span class="badge text-bg-<?= $navUser['role'] === 'admin' ? 'warning text-dark' : 'light text-dark' ?>">
+                        <?= e($navUser['role']) ?>
+                    </span>
+                </span>
+                <form method="post" action="<?= e(tt_url('logout.php')) ?>" class="d-inline">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-light btn-sm">Sign out</button>
+                </form>
+            </div>
+        <?php endif; ?>
     </div>
 </nav>
 <main class="container pb-5">

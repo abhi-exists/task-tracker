@@ -1,19 +1,15 @@
 <?php
 /**
- * Change a single task's status from the list page. POST only, and the status
- * value is checked against the whitelist before it reaches the database.
+ * Change a single task's status from the list page. POST + CSRF + owner-only:
+ * the UPDATE carries "AND user_id = :uid", so a forged id in the body changes
+ * nothing and answers 403.
  */
 
 require __DIR__ . '/../../src/config.php';
 
-if (!is_post()) {
-    header('Allow: POST');
-    tt_fatal(
-        sprintf('Non-POST request to status.php from %s', $_SERVER['REMOTE_ADDR'] ?? '?'),
-        'Changing a status requires a POST request.',
-        405
-    );
-}
+$actor = auth_require_login();
+
+csrf_require_post();
 
 $id     = post_int('id');
 $status = post_str('status');
@@ -23,10 +19,10 @@ if (!in_array($status, TaskRepository::STATUSES, true)) {
     tt_redirect(list_url(next_query()));
 }
 
-if ($id > 0 && tasks()->updateStatus($id, $status)) {
-    flash('success', sprintf('Task #%d is now "%s".', $id, $status));
-} else {
-    flash('warning', 'That task no longer exists.');
-}
+// Refuses ids that are not this user's task before any write happens.
+require_task($id, $actor, true);
+
+tasks()->updateStatus($id, $status, $actor);
+flash('success', sprintf('Task #%d is now "%s".', $id, $status));
 
 tt_redirect(list_url(next_query()));

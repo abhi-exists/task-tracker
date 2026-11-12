@@ -3,6 +3,10 @@
 
 require __DIR__ . '/../../src/config.php';
 
+$actor = auth_require_login();
+require_methods(['GET', 'HEAD']);
+$isAdmin = $actor['role'] === 'admin';
+
 $filters = [
     'q'        => get_str('q'),
     'status'   => in_array(get_str('status'), TaskRepository::STATUSES, true) ? get_str('status') : '',
@@ -10,20 +14,20 @@ $filters = [
 ];
 
 $repo  = tasks();
-$total = $repo->count($filters);
+$total = $repo->count($filters, $actor);
 
 $pages     = max(1, (int)ceil($total / TaskRepository::PER_PAGE));
 $page      = page_from_request($pages);
-$rows      = $repo->search($filters, $page);
-$counts    = $repo->statusCounts($filters);
+$rows      = $repo->search($filters, $actor, $page);
+$counts    = $repo->statusCounts($filters, $actor);
 $firstSeen = $total === 0 ? 0 : (($page - 1) * TaskRepository::PER_PAGE) + 1;
 $lastSeen  = min($total, $page * TaskRepository::PER_PAGE);
 
 $cards = [
-    ['label' => 'Total',         'value' => $counts['total'],       'class' => 'primary',   'filter' => ''],
-    ['label' => 'Pending',       'value' => $counts['Pending'],     'class' => 'secondary', 'filter' => 'Pending'],
-    ['label' => 'In Progress',   'value' => $counts['In Progress'], 'class' => 'warning',   'filter' => 'In Progress'],
-    ['label' => 'Completed',     'value' => $counts['Completed'],   'class' => 'success',   'filter' => 'Completed'],
+    ['label' => 'Total',       'value' => $counts['total'],       'class' => 'primary',   'filter' => ''],
+    ['label' => 'Pending',     'value' => $counts['Pending'],     'class' => 'secondary', 'filter' => 'Pending'],
+    ['label' => 'In Progress', 'value' => $counts['In Progress'], 'class' => 'warning',   'filter' => 'In Progress'],
+    ['label' => 'Completed',   'value' => $counts['Completed'],   'class' => 'success',   'filter' => 'Completed'],
 ];
 
 $page_title = 'Tasks';
@@ -33,7 +37,14 @@ require TT_ROOT . '/templates/header.php';
 ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-    <h1 class="h3 mb-0">Tasks</h1>
+    <div>
+        <h1 class="h3 mb-0"><?= $isAdmin ? 'All tasks' : 'My tasks' ?></h1>
+        <?php if ($isAdmin): ?>
+            <div class="text-muted small">
+                Signed in as admin - you can see every user's tasks and delete any of them, but only an owner can edit a task.
+            </div>
+        <?php endif; ?>
+    </div>
     <a class="btn btn-primary" href="<?= e(tt_url('tasks/create.php')) ?>">Add task</a>
 </div>
 
@@ -106,6 +117,9 @@ require TT_ROOT . '/templates/header.php';
                 <th scope="col" style="width:3.5rem">#</th>
                 <th scope="col">Title</th>
                 <th scope="col">Description</th>
+                <?php if ($isAdmin): ?>
+                    <th scope="col" style="width:11rem">Owner</th>
+                <?php endif; ?>
                 <th scope="col" style="width:12rem">Status</th>
                 <th scope="col" style="width:7rem">Priority</th>
                 <th scope="col" style="width:8rem">Due</th>
@@ -115,7 +129,7 @@ require TT_ROOT . '/templates/header.php';
             <tbody>
             <?php if (!$rows): ?>
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-5">
+                    <td colspan="<?= $isAdmin ? 8 : 7 ?>" class="text-center text-muted py-5">
                         <?php if ($total === 0 && $filters !== ['q' => '', 'status' => '', 'priority' => '']): ?>
                             Nothing found. <a href="<?= e(tt_url('tasks/index.php')) ?>">Show all tasks</a>.
                         <?php else: ?>
@@ -125,27 +139,46 @@ require TT_ROOT . '/templates/header.php';
                 </tr>
             <?php endif; ?>
             <?php foreach ($rows as $row): ?>
-                <?php $overdue = $row['due_date'] && $row['status'] !== 'Completed' && $row['due_date'] < date('Y-m-d'); ?>
+                <?php
+                    $mine    = task_owned_by($row, $actor);
+                    $overdue = $row['due_date'] && $row['status'] !== 'Completed' && $row['due_date'] < date('Y-m-d');
+                ?>
                 <tr>
                     <td class="text-muted"><?= (int)$row['id'] ?></td>
                     <td class="fw-semibold"><?= e($row['title']) ?></td>
                     <td class="text-muted task-description"><?= nl2br(e($row['description'])) ?></td>
+                    <?php if ($isAdmin): ?>
+                        <td class="small">
+                            <?= e($row['owner_name'] ?? '(deleted user)') ?>
+                            <span class="d-block text-muted"><?= e($row['owner_email'] ?? '') ?></span>
+                        </td>
+                    <?php endif; ?>
                     <td>
-                        <form method="post" action="<?= e(tt_url('tasks/status.php')) ?>"
-                              class="d-flex gap-1 align-items-center">
-                            <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
-                            <input type="hidden" name="next" value="<?= e($next) ?>">
-                            <label class="visually-hidden" for="status-<?= (int)$row['id'] ?>">Status for task <?= (int)$row['id'] ?></label>
-                            <select name="status" id="status-<?= (int)$row['id'] ?>" class="form-select form-select-sm"
-                                    data-autosubmit aria-label="Status">
-                                <?php foreach (TaskRepository::STATUSES as $status): ?>
-                                    <option value="<?= e($status) ?>" <?= $row['status'] === $status ? 'selected' : '' ?>>
-                                        <?= e($status) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-secondary" data-no-js>Set</button>
-                        </form>
+                        <?php if ($mine): ?>
+                            <form method="post" action="<?= e(tt_url('tasks/status.php')) ?>"
+                                  class="d-flex gap-1 align-items-center">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                                <input type="hidden" name="next" value="<?= e($next) ?>">
+                                <label class="visually-hidden" for="status-<?= (int)$row['id'] ?>">
+                                    Status for task <?= (int)$row['id'] ?>
+                                </label>
+                                <select name="status" id="status-<?= (int)$row['id'] ?>" class="form-select form-select-sm"
+                                        data-autosubmit aria-label="Status">
+                                    <?php foreach (TaskRepository::STATUSES as $status): ?>
+                                        <option value="<?= e($status) ?>" <?= $row['status'] === $status ? 'selected' : '' ?>>
+                                            <?= e($status) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" data-no-js>Set</button>
+                            </form>
+                        <?php else: ?>
+                            <span class="badge text-bg-<?= e(status_badge((string)$row['status'])) ?>">
+                                <?= e($row['status']) ?>
+                            </span>
+                            <span class="d-block text-muted small">read-only</span>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <span class="badge text-bg-<?= e(priority_badge((string)$row['priority'])) ?>">
@@ -157,10 +190,13 @@ require TT_ROOT . '/templates/header.php';
                         <?php if ($overdue): ?><span class="d-block">(overdue)</span><?php endif; ?>
                     </td>
                     <td class="text-end text-nowrap">
-                        <a class="btn btn-sm btn-outline-primary"
-                           href="<?= e(edit_url((int)$row['id'])) ?>">Edit</a>
+                        <?php if ($mine): ?>
+                            <a class="btn btn-sm btn-outline-primary"
+                               href="<?= e(edit_url((int)$row['id'])) ?>">Edit</a>
+                        <?php endif; ?>
                         <form method="post" action="<?= e(tt_url('tasks/delete.php')) ?>" class="d-inline"
                               data-confirm="Delete &quot;<?= e($row['title']) ?>&quot;? This cannot be undone.">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
                             <input type="hidden" name="next" value="<?= e($next) ?>">
                             <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>

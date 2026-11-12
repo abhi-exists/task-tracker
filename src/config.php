@@ -106,3 +106,5 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require TT_ROOT . '/src/helpers.php';
 require TT_ROOT . '/src/db.php';
 require TT_ROOT . '/src/TaskRepository.php';
+require TT_ROOT . '/src/csrf.php';
+require TT_ROOT . '/src/auth.php';

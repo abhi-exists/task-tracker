@@ -184,6 +184,37 @@
         });
     });
 
+    // ------------------------------------------------- registration form ---
+    document.querySelectorAll('form[data-validate="register"]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            var errors = 0;
+            var name = form.name.value.trim();
+            var email = form.email.value.trim();
+            var password = form.password.value;
+            var confirm = form.password_confirm.value;
+
+            fieldError('name', (name === '' || name.length > 100)
+                ? 'Please enter a name between 1 and 100 characters.' : '');
+            if (name === '' || name.length > 100) { errors++; }
+
+            fieldError('email', /^[^\s@]+@[^\s@.]+\.[^\s@]{2,}$/.test(email) ? '' : 'Please enter a valid email address.');
+            if (!/^[^\s@]+@[^\s@.]+\.[^\s@]{2,}$/.test(email)) { errors++; }
+
+            fieldError('password', (password.length < 8 || password.length > 200)
+                ? 'Password must be between 8 and 200 characters.' : '');
+            if (password.length < 8 || password.length > 200) { errors++; }
+
+            fieldError('password_confirm', password === confirm ? '' : 'The two passwords do not match.');
+            if (password !== confirm) { errors++; }
+
+            if (errors > 0) {
+                event.preventDefault();
+                var firstInvalid = form.querySelector('.is-invalid');
+                if (firstInvalid) { firstInvalid.focus(); }
+            }
+        });
+    });
+
     // ------------------------------------------------ auto-submit dropdown --
     // The "Set" button is the no-JavaScript fallback; hide it when JS is running.
     document.querySelectorAll('[data-autosubmit]').forEach(function (select) {

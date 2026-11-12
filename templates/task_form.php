@@ -23,6 +23,7 @@ $dueDate     = $task['due_date'] ?? '';
         </h1>
 
         <form method="post" action="<?= e($formAction) ?>" data-validate="task" novalidate>
+            <?= csrf_field() ?>
             <input type="hidden" name="next" value="<?= e(next_query()) ?>">
 
             <div class="mb-3">

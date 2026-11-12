@@ -51,6 +51,22 @@ function tt_redirect(string $path, int $status = 302): never
     exit;
 }
 
+/**
+ * Allow only a root-relative local path as a redirect target. A value like
+ * "//evil.example" or "http://evil.example" falls back to $fallback, which
+ * closes the open-redirect hole in ?next= parameters.
+ */
+function tt_safe_target(mixed $target, string $fallback): string
+{
+    if (!is_string($target) || $target === '') {
+        return $fallback;
+    }
+    if (!preg_match('#^/(?!/)[^\\\\\x00-\x1f\x7f]*$#', $target)) {
+        return $fallback;
+    }
+    return $target;
+}
+
 // ------------------------------------------------------------ flash --------
 
 /** Queue a one-message alert for the next request. */
@@ -160,6 +176,41 @@ function edit_url(int $id): string
 }
 
 
+// ---------------------------------------------------------- authorization --
+
+/**
+ * Load a task for the current actor or stop with the right status code.
+ *
+ * The repository already refuses to return somebody else's row; this turns the
+ * two different reasons for getting nothing into two different answers:
+ *   - the id does not exist at all            -> 404
+ *   - it exists but belongs to someone else   -> 403
+ * so guessing ids in a URL or a POST body never quietly reveals anything.
+ *
+ * @param bool $ownerOnly true for content edits and status changes: even an
+ *                        admin may not rewrite another user's task.
+ */
+function require_task(int $id, array $actor, bool $ownerOnly = false): array
+{
+    $task = tasks()->find($id, $actor);
+
+    if ($task !== null && (!$ownerOnly || task_owned_by($task, $actor))) {
+        return $task;
+    }
+
+    if (!tasks()->exists($id)) {
+        tt_fatal(sprintf('Task %d does not exist (actor %d)', $id, $actor['id']), 'That task does not exist.', 404);
+    }
+
+    tt_fatal(
+        sprintf('Actor %d (%s) was denied access to task %d', $actor['id'], $actor['role'], $id),
+        $ownerOnly
+            ? 'Only the owner of a task can change its contents or status.'
+            : 'That task belongs to another user.',
+        403
+    );
+}
+
 // ---------------------------------------------------------- validation -----
 
 /** Collect the raw (trimmed) task fields from $_POST. */
@@ -236,4 +287,24 @@ function priority_badge(string $priority): string
 function is_post(): bool
 {
     return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+}
+
+/**
+ * Reject any HTTP method not on the allow list. Without this a PUT or PATCH
+ * would be treated as an ordinary GET, and a body sent with it would be
+ * silently ignored instead of refused.
+ */
+function require_methods(array $allowed): void
+{
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if (in_array($method, $allowed, true)) {
+        return;
+    }
+
+    header('Allow: ' . implode(', ', $allowed));
+    tt_fatal(
+        sprintf('%s request to %s from %s', $method, $_SERVER['SCRIPT_NAME'] ?? '?', $_SERVER['REMOTE_ADDR'] ?? '?'),
+        'That request method is not allowed here.',
+        405
+    );
 }

@@ -1,25 +1,25 @@
 <?php
 /**
- * Delete a task. POST only: a link or a prefetched GET must never destroy data.
+ * Delete a task. POST only, CSRF-checked, and the id is verified against the
+ * owner (or any task for an admin) inside the DELETE statement itself.
  */
 
 require __DIR__ . '/../../src/config.php';
 
-if (!is_post()) {
-    header('Allow: POST');
-    tt_fatal(
-        sprintf('Non-POST request to delete.php from %s', $_SERVER['REMOTE_ADDR'] ?? '?'),
-        'Deleting a task requires a POST request.',
-        405
-    );
-}
+$actor = auth_require_login();
+
+csrf_require_post();
 
 $id = post_int('id');
 
-if ($id > 0 && tasks()->delete($id)) {
+// 404 when the id is unknown, 403 when it belongs to somebody else and the
+// actor is not an admin. Nothing is deleted before that check passes.
+require_task($id, $actor, false);
+
+if (tasks()->delete($id, $actor)) {
     flash('success', sprintf('Task #%d deleted.', $id));
 } else {
-    flash('warning', 'That task no longer exists.');
+    flash('warning', 'That task could not be deleted.');
 }
 
 tt_redirect(list_url(next_query()));
