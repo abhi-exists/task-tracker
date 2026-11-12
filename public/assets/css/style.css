@@ -1,0 +1,32 @@
+/* Small additions on top of Bootstrap 5. */
+
+body {
+    min-height: 100vh;
+}
+
+.table > :not(caption) > * > * {
+    vertical-align: middle;
+}
+
+/* Keep long descriptions from stretching the table. */
+.task-description {
+    max-width: 34rem;
+    overflow-wrap: anywhere;
+}
+
+.card {
+    border: 0;
+    border-radius: .75rem;
+}
+
+/* Status badges are coloured by the Bootstrap text helpers; this only rounds them. */
+.badge {
+    font-weight: 600;
+}
+
+@media (max-width: 575.98px) {
+    /* On phones the action buttons stack instead of overflowing. */
+    .table td:last-child {
+        white-space: normal;
+    }
+}

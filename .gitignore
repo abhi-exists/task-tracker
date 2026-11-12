@@ -1,0 +1,15 @@
+# Local configuration - contains real database credentials. Never commit this.
+/config.php
+
+# Dependency folders (the app itself needs no Composer dependencies)
+/vendor/
+
+# Tooling / scratch artifacts
+/.qoder/
+*.log
+/mysql-data/
+/Submission-test/
+
+# OS noise
+.DS_Store
+Thumbs.db
