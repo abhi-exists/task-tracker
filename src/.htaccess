@@ -1,0 +1,10 @@
+# Never served: /src is application code, reached only through require.
+# Apache 2.4:
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+# Apache 2.2 and older:
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

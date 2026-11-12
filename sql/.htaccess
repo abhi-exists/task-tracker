@@ -1,0 +1,13 @@
+# The web root of this application is the /public folder.
+# If the project folder itself is ever published by mistake, this file keeps
+# the non-public directories out of reach of the browser.
+#
+# Apache 2.4:
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+# Apache 2.2 and older:
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
