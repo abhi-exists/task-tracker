@@ -17,9 +17,9 @@ if (!is_post()) {
 $id = post_int('id');
 
 if ($id > 0 && tasks()->delete($id)) {
-    flash('success', 'Task deleted.');
+    flash('success', sprintf('Task #%d deleted.', $id));
 } else {
     flash('warning', 'That task no longer exists.');
 }
 
-tt_redirect(tt_url('tasks/index.php'));
+tt_redirect(list_url(next_query()));

@@ -11,22 +11,35 @@ if ($task === null) {
 }
 
 $errors     = [];
+$next       = next_query();
 $formAction = tt_url('tasks/edit.php?id=' . $id);
 $page_title = 'Edit task';
 
 if (is_post()) {
-    $title       = post_str('title');
-    $description = post_str('description');
+    $submitted = read_task_fields();
+    $errors    = validate_task(
+        $submitted['title'],
+        $submitted['description'],
+        $submitted['status'],
+        $submitted['priority'],
+        $submitted['due_date']
+    );
 
-    if ($title === '') {
-        $errors['title'] = 'Title is required.';
-        $task['title']       = $title;
-        $task['description'] = $description;
-    } else {
-        tasks()->update($id, $title, $description);
+    if ($errors === []) {
+        tasks()->update(
+            $id,
+            $submitted['title'],
+            $submitted['description'],
+            $submitted['status'] !== '' ? $submitted['status'] : 'Pending',
+            $submitted['priority'] !== '' ? $submitted['priority'] : 'Medium',
+            $submitted['due_date'] !== '' ? $submitted['due_date'] : null
+        );
         flash('success', 'Task updated.');
-        tt_redirect(tt_url('tasks/index.php'));
+        tt_redirect(list_url($next));
     }
+
+    // Keep what the user typed so the form can be shown again with the errors.
+    $task = array_merge($task, $submitted);
 }
 
 require TT_ROOT . '/templates/header.php';

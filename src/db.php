@@ -34,6 +34,10 @@ function db(): PDO
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            // Report rows *matched* rather than rows *changed*, so saving a task
+            // without editing anything is still a success instead of a false
+            // "this task does not exist".
+            PDO::MYSQL_ATTR_FOUND_ROWS   => true,
         ]);
     } catch (PDOException $e) {
         // Credentials are never included here; only a hint useful for setup.

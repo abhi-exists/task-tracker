@@ -1,8 +1,15 @@
-/* Task Tracker - vanilla JS enhancements only.
-   The app works without these; they add confirmation dialogs and, in the
-   browser, the same length/required checks the server enforces. */
+/* Task Tracker - progressive enhancement only.
+   Everything here (confirm dialogs, inline validation, character counters,
+   auto-submit status dropdowns) makes the UI nicer. The server independently
+   enforces the same rules, so the app is correct with JavaScript disabled. */
 (function () {
     'use strict';
+
+    // Mirror of the server-side whitelists in TaskRepository.
+    var STATUSES = ['Pending', 'In Progress', 'Completed'];
+    var PRIORITIES = ['Low', 'Medium', 'High'];
+    var MAX_TITLE = 150;
+    var MAX_DESCRIPTION = 2000;
 
     /**
      * Show a Bootstrap modal asking for confirmation.
@@ -14,7 +21,9 @@
             return Promise.resolve(window.confirm(message));
         }
 
-        const host = document.createElement('div');
+        var host = document.createElement('div');
+        // Static markup only - the dynamic text below is set with textContent,
+        // so a task title can never be interpreted as HTML here.
         host.innerHTML =
             '<div class="modal fade" tabindex="-1">' +
             '  <div class="modal-dialog modal-dialog-centered modal-sm">' +
@@ -31,12 +40,14 @@
             '</div>';
         document.body.appendChild(host);
 
-        const element = host.firstElementChild;
+        var element = host.firstElementChild;
         element.querySelector('.modal-title').textContent = title || 'Please confirm';
         element.querySelector('.modal-body').textContent = message;
 
-        const modal = new window.bootstrap.Modal(element);
-        let accepted = false;
+        var modal = new window.bootstrap.Modal(element);
+        var accepted = false;
+        var resolve;
+        var promise = new Promise(function (r) { resolve = r; });
 
         element.querySelector('[data-yes]').addEventListener('click', function () {
             accepted = true;
@@ -48,16 +59,14 @@
             resolve(accepted);
         });
 
-        let resolve;
-        const promise = new Promise(function (r) { resolve = r; });
         modal.show();
         return promise;
     }
 
     // Any form carrying data-confirm asks before submitting.
     document.addEventListener('submit', function (event) {
-        const form = event.target;
-        const message = form.dataset.confirm;
+        var form = event.target;
+        var message = form.dataset.confirm;
         if (!message || form.dataset.confirmed === '1') {
             return;
         }
@@ -67,6 +76,123 @@
                 form.dataset.confirmed = '1';
                 form.submit();
             }
+        });
+    });
+
+    // ---------------------------------------------------- field validation --
+    function fieldError(name, message) {
+        var control = document.getElementById(name);
+        var feedback = document.querySelector('[data-error-for="' + name + '"]');
+        if (!control) {
+            return;
+        }
+        if (message) {
+            control.classList.add('is-invalid');
+            if (feedback) {
+                feedback.classList.remove('d-none');
+                feedback.textContent = message;
+            }
+        } else {
+            control.classList.remove('is-invalid');
+            if (feedback) {
+                feedback.classList.add('d-none');
+            }
+        }
+    }
+
+    function validDate(value) {
+        if (!value) {
+            return true; // optional
+        }
+        var parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!parts) {
+            return false;
+        }
+        var date = new Date(value + 'T00:00:00');
+        return !isNaN(date.getTime()) && date.getFullYear() === Number(parts[1])
+            && date.getMonth() + 1 === Number(parts[2])
+            && date.getDate() === Number(parts[3]);
+    }
+
+    function validateTaskForm(form) {
+        var errors = 0;
+
+        var title = form.title.value.trim();
+        if (title === '') {
+            fieldError('title', 'Please give the task a title.');
+            errors++;
+        } else if (title.length > MAX_TITLE) {
+            fieldError('title', 'Title must be ' + MAX_TITLE + ' characters or fewer (currently ' + title.length + ').');
+            errors++;
+        } else {
+            fieldError('title', '');
+        }
+
+        var description = form.description.value.trim();
+        if (description.length > MAX_DESCRIPTION) {
+            fieldError('description', 'Description must be ' + MAX_DESCRIPTION + ' characters or fewer (currently ' + description.length + ').');
+            errors++;
+        } else {
+            fieldError('description', '');
+        }
+
+        fieldError('status', STATUSES.indexOf(form.status.value) === -1 ? 'Please choose a valid status.' : '');
+        if (STATUSES.indexOf(form.status.value) === -1) {
+            errors++;
+        }
+
+        fieldError('priority', form.priority.value && PRIORITIES.indexOf(form.priority.value) === -1
+            ? 'Please choose a valid priority.' : '');
+        if (form.priority.value && PRIORITIES.indexOf(form.priority.value) === -1) {
+            errors++;
+        }
+
+        if (!validDate(form.due_date.value)) {
+            fieldError('due_date', 'Due date must be a real date in YYYY-MM-DD format.');
+            errors++;
+        } else {
+            fieldError('due_date', '');
+        }
+
+        return errors === 0;
+    }
+
+    document.querySelectorAll('form[data-validate="task"]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!validateTaskForm(form)) {
+                event.preventDefault();
+                var firstInvalid = form.querySelector('.is-invalid');
+                if (firstInvalid) {
+                    firstInvalid.focus();
+                }
+            }
+        });
+
+        // Live character counters.
+        [['title', MAX_TITLE], ['description', MAX_DESCRIPTION]].forEach(function (pair) {
+            var control = form.elements[pair[0]];
+            var counter = form.querySelector('[data-counter-for="' + pair[0] + '"]');
+            if (!control || !counter) {
+                return;
+            }
+            var update = function () {
+                counter.textContent = String(control.value.length);
+                counter.closest('.form-text').classList.toggle('text-danger', control.value.length > pair[1]);
+            };
+            control.addEventListener('input', update);
+            update();
+        });
+    });
+
+    // ------------------------------------------------ auto-submit dropdown --
+    // The "Set" button is the no-JavaScript fallback; hide it when JS is running.
+    document.querySelectorAll('[data-autosubmit]').forEach(function (select) {
+        var fallback = select.parentElement.querySelector('[data-no-js]');
+        if (fallback) {
+            fallback.classList.add('d-none');
+        }
+        select.addEventListener('change', function () {
+            select.closest('form').submit();
         });
     });
 })();
