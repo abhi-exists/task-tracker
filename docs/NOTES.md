@@ -37,6 +37,47 @@ reading is that admins may also reassign status, that is a two-line change in
 `TaskRepository::updateStatus()` plus the button rendering in
 `public/tasks/index.php`.
 
+## How this was built: what I did, and what I used AI and other tools for
+
+### What I did myself
+
+- Read the brief, set the scope, and decided to build it as three separate
+  commits, one per level, in order.
+- Made the design decisions, including the interpretation of the admin rules
+  (status change counts as editing content, so it is owner-only).
+- Reviewed the generated code at each level, with the most attention on the
+  authorization rules in `src/TaskRepository.php`, since they are the security
+  boundary.
+- Read the failing test cases and decided which fixes were needed (see the next
+  section for the main example).
+- Looked through the 17 screenshots by eye and checked the responsive layout.
+- Kept `config.php` and any database dump out of version control.
+
+### What I used AI for
+
+I used an AI coding assistant, working from the command line, for the following:
+
+- Writing first drafts of the application code (PHP, PDO, MySQL queries and the
+  page templates).
+- Writing the SQL schema and the migration files.
+- Running `php -l` and MySQL checks and the curl test harness against a live
+  server, then revising the code after the failures they reported.
+- Drafting the documentation: this file, the README and `docs/TESTING.md`.
+
+All AI output was treated as a draft. It was reviewed, tested and corrected
+before being committed, and several of the fixes below came from that review.
+
+### Other tools
+
+| Tool | Used for |
+|------|----------|
+| PHP (`php -l`, built-in `php -S` server) | Syntax checks and local development server |
+| MySQL 8.0.45 | Running the schema and both migration paths for real |
+| curl + `mysql` shell script (`docs/verify.sh`) | 143 automated checks of requests and database state |
+| Headless Chrome over CDP | 48 browser checks, JS error detection, and the 17 screenshots |
+| Bootstrap (via CDN, with SRI) | Page styling |
+| Git | One commit per level |
+
 ## One concrete change made after reviewing the generated code
 
 The most consequential one came from a failing test case, and it was a real
@@ -166,14 +207,10 @@ in `docs/TESTING.md` section 6:
 - Tested against MySQL 8.0.45 only. The schema should work on MariaDB 10.3+
   and MySQL 5.7+, but that was not verified here.
 
-## AI tool used
+## Review focus for anyone taking this over
 
-**Qoder CLI** (this session) wrote the application code, the SQL, the migration
-files and this documentation, ran the PHP lint and MySQL checks, drove the curl
-test harness against a live server, and revised the code after the failures it
-reported - the `edit.php` id-ambiguity fix above is the worked example.
-
-Human review focus for anyone taking this over: the authorization rules in
-`src/TaskRepository.php` (they are the security boundary), the interpretation of
-what an admin may change, and the two files that must never be committed with
-real values (`config.php` and any database dump).
+- The authorization rules in `src/TaskRepository.php` (they are the security
+  boundary).
+- The interpretation of what an admin may change.
+- The two files that must never be committed with real values: `config.php`
+  and any database dump.
